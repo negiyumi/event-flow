@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>イベントフロー</title>
+<style>
+  :root{
+    --paper:#FAF6EF;
+    --paper-deep:#F1EAD9;
+    --ink:#2C2825;
+    --ink-soft:#6B635A;
+    --coral:#D9603F;
+    --coral-deep:#B84A2E;
+    --sage:#5C7A5E;
+    --sage-soft:#E4ECDF;
+    --rose:#C77B6B;
+    --line:#D8CFBd;
+    --card:#FFFFFF;
+    --shadow: 0 2px 10px rgba(60,45,30,0.08);
+    --radius: 14px;
+    --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic Pro", sans-serif;
+    --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-body);
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button{font-family:inherit;}
+
+  /* ===== Password Gate ===== */
+  #gate{
+    position:fixed; inset:0; background:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+    z-index:999; padding:24px;
+  }
+  .gate-card{
+    background:var(--card);
+    border-radius:20px;
+    padding:40px 32px;
+    max-width:380px;
+    width:100%;
+    text-align:center;
+    box-shadow: 0 8px 30px rgba(60,45,30,0.12);
+    border:1px solid var(--line);
+  }
+  .gate-mark{
+    width:56px;height:56px;border-radius:50%;
+    background:var(--coral);
+    margin:0 auto 18px;
+    display:flex;align-items:center;justify-content:center;
+    color:white; font-family:var(--font-display); font-weight:700; font-size:22px;
+  }
+  .gate-card h1{
+    font-family:var(--font-display);
+    font-size:19px; font-weight:700; margin:0 0 6px;
+    letter-spacing:0.02em;
+  }
+  .gate-card p{ font-size:13px; color:var(--ink-soft); margin:0 0 22px; line-height:1.6;}
+  #gate input{
+    width:100%; padding:14px 16px; font-size:16px;
+    border:1.5px solid var(--line); border-radius:10px;
+    background:var(--paper); color:var(--ink);
+    margin-bottom:12px; outline:none;
+    text-align:center; letter-spacing:0.1em;
+  }
+  #gate input:focus{ border-color:var(--coral); }
+  #gate button.go{
+    width:100%; padding:14px; font-size:15px; font-weight:700;
+    border:none; border-radius:10px; background:var(--coral); color:white;
+    cursor:pointer; transition:background .15s;
+  }
+  #gate button.go:active{ background:var(--coral-deep); }
+  #gateError{ color:var(--coral-deep); font-size:12px; min-height:18px; margin-top:8px; }
+
+  /* ===== App Shell ===== */
+  #app{ display:none; }
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:var(--paper); border-bottom:1px solid var(--line);
+    padding:8px 14px 6px;
+  }
+  .brand-row{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px;}
+  .brand{
+    font-family:var(--font-display); font-weight:700; font-size:14px; letter-spacing:0.02em;
+    display:flex; align-items:center; gap:6px;
+  }
+  .brand .dot{ width:8px;height:8px;border-radius:50%; background:var(--coral); display:inline-block;}
+  .lock-btn{
+    font-size:11px; color:var(--ink-soft); background:none; border:none; cursor:pointer;
+    text-decoration:underline; padding:4px;
+  }
+
+  /* Compact selector grid */
+  .sel-grid{ display:flex; flex-direction:column; gap:4px; margin-bottom:6px; }
+  .sel-item{ display:flex; align-items:center; gap:6px; }
+  .sel-item.full{ flex-direction:column; align-items:stretch; gap:4px; }
+  .sel-label{ font-size:10px; font-weight:700; color:var(--ink-soft); white-space:nowrap; min-width:28px; }
+
+  .selector-row{ display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
+  .selector-row::-webkit-scrollbar{ display:none; }
+  .selector-row.compact{ flex:1; }
+  .chip{
+    flex:0 0 auto;
+    padding:4px 10px; border-radius:999px; border:1.5px solid var(--line);
+    background:var(--card); color:var(--ink-soft); font-size:11px; font-weight:600;
+    cursor:pointer; white-space:nowrap; transition: all .15s;
+  }
+  .chip.active{ background:var(--coral); border-color:var(--coral); color:white; }
+
+  select.pref-select{
+    padding:4px 8px; font-size:11px; border-radius:8px;
+    border:1.5px solid var(--line); background:var(--card); color:var(--ink);
+    flex:0 0 auto; max-width:110px;
+  }
+
+  .mode-toggle{
+    display:flex; background:var(--paper-deep); border-radius:10px; padding:3px; gap:2px;
+  }
+  .mode-toggle button{
+    flex:1; padding:5px 2px; border:none; border-radius:8px; background:transparent;
+    font-size:11px; font-weight:700; color:var(--ink-soft); cursor:pointer; transition: all .15s;
+  }
+  .mode-toggle button.active{ background:var(--card); color:var(--ink); box-shadow:var(--shadow); }
+
+  main{ padding:14px 16px 60px; max-width:720px; margin:0 auto; }
+
+  /* ===== Step Mode ===== */
+  #stepView{ }
+  .progress-track{
+    display:flex; gap:5px; margin-bottom:18px;
+  }
+  .progress-track .seg{
+    flex:1; height:4px; border-radius:3px; background:var(--line);
+  }
+  .progress-track .seg.done{ background:var(--coral); }
+
+  .step-card{
+    background:var(--card); border-radius:18px; padding:24px 22px;
+    box-shadow:var(--shadow); border:1px solid var(--line);
+    animation: fadeUp .25s ease;
+  }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+
+  .step-eyebrow{
+    font-size:11px; font-weight:700; color:var(--coral); letter-spacing:0.08em;
+    text-transform:uppercase; margin-bottom:6px;
+  }
+  .step-title{
+    font-family:var(--font-display); font-size:19px; font-weight:700; margin:0 0 16px;
+  }
+  .step-line{
+    font-size:16px; line-height:1.85; margin-bottom:12px; color:var(--ink);
+    font-weight:500;
+  }
+  .step-line:last-of-type{ margin-bottom:0; }
+
+  .step-note{
+    margin-top:18px; padding:12px 14px; background:var(--sage-soft); border-radius:10px;
+    font-size:12.5px; color:#3F5742; line-height:1.6;
+  }
+  .step-note b{ color:var(--sage); }
+
+  .branch-row{ display:flex; gap:10px; margin-top:18px; }
+  .branch-btn{
+    flex:1; padding:14px 8px; border-radius:12px; border:none; cursor:pointer;
+    font-size:14px; font-weight:700; color:white; text-align:center;
+  }
+  .branch-btn.yes{ background:var(--sage); }
+  .branch-btn.no{ background:var(--rose); }
+
+  .branch-detail{
+    margin-top:14px; padding:14px; border-radius:10px; background:var(--paper-deep);
+    font-size:13px; line-height:1.7; display:none;
+  }
+  .branch-detail.show{ display:block; animation: fadeUp .2s ease; }
+
+  .nav-row{ display:flex; justify-content:space-between; margin-top:18px; gap:10px; }
+  .nav-btn{
+    padding:11px 18px; border-radius:10px; border:1.5px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .nav-btn:disabled{ opacity:0.35; }
+  .nav-btn.primary{ background:var(--ink); color:white; border-color:var(--ink); }
+
+  .pref-note{
+    margin-top:16px; padding:14px; border-radius:10px; border:1px dashed var(--coral);
+    background:#FBF1EC; font-size:12.5px; line-height:1.7;
+  }
+  .pref-note .pref-name{ font-weight:700; color:var(--coral-deep); margin-bottom:4px; display:block;}
+
+  /* ===== Flowchart Mode ===== */
+  #flowView{ }
+  .flow-node{
+    position:relative; margin-left:18px; padding-left:22px; border-left:2px solid var(--line);
+    padding-bottom:28px;
+  }
+  .flow-node:last-child{ border-left-color:transparent; padding-bottom:0;}
+  .flow-node::before{
+    content:''; position:absolute; left:-7px; top:2px; width:12px;height:12px;
+    border-radius:50%; background:var(--coral); border:3px solid var(--paper);
+  }
+  .flow-card{
+    background:var(--card); border-radius:14px; padding:16px 16px; box-shadow:var(--shadow);
+    border:1px solid var(--line);
+  }
+  .flow-card .ftitle{ font-family:var(--font-display); font-weight:700; font-size:14.5px; margin-bottom:8px;}
+  .flow-card .fline{ font-size:13.5px; line-height:1.75; margin-bottom:6px; }
+  .flow-card .fnote{ font-size:11.5px; color:var(--sage); margin-top:8px; line-height:1.6; }
+
+  .flow-branches{ display:flex; gap:10px; margin-top:12px; }
+  .flow-branch{
+    flex:1; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.6;
+  }
+  .flow-branch.yes{ background:var(--sage-soft); border:1px solid #C8D9C9;}
+  .flow-branch.no{ background:#F6E4DF; border:1px solid #E8C4B6;}
+  .flow-branch .blabel{ font-weight:700; display:block; margin-bottom:4px;}
+  .flow-branch.yes .blabel{ color:var(--sage); }
+  .flow-branch.no .blabel{ color:var(--coral-deep); }
+
+  .points-box{
+    margin-top:28px; background:var(--ink); color:var(--paper); border-radius:16px; padding:20px;
+  }
+  .points-box h3{
+    font-family:var(--font-display); font-size:13px; margin:0 0 12px; letter-spacing:0.06em; color:#F1C9B8;
+  }
+  .points-box ol{ margin:0; padding-left:18px; font-size:13px; line-height:1.9;}
+
+  .pref-block{
+    margin-top:22px; padding-top:18px; border-top:1px dashed var(--line);
+  }
+
+  /* ===== Region Mode ===== */
+  .region-section-label{
+    font-size:12px; font-weight:700; color:var(--ink-soft); letter-spacing:0.05em; margin-bottom:10px;
+  }
+  .region-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  @media (max-width:480px){ .region-grid{ grid-template-columns:1fr; } }
+  .region-card{
+    background:var(--card); border:1.5px solid var(--line); border-radius:12px; padding:14px;
+    cursor:pointer; transition: all .15s;
+  }
+  .region-card:active{ transform:scale(0.98); }
+  .region-card.active{ border-color:var(--coral); background:#FBF1EC; }
+  .region-card.mindset.active{ border-color:var(--sage); background:var(--sage-soft); }
+  .region-name{ font-family:var(--font-display); font-weight:700; font-size:14px; margin-bottom:6px; color:var(--ink); }
+  .region-card.active .region-name{ color:var(--coral-deep); }
+  .region-card.mindset.active .region-name{ color:var(--sage); }
+  .region-line{ font-size:11.5px; line-height:1.6; color:var(--ink-soft); margin-bottom:3px; }
+  .region-line b{ color:var(--ink); }
+  .region-card.solo{
+    cursor:default; padding:18px; max-width:480px;
+  }
+  .region-card.solo:active{ transform:none; }
+  .region-card.solo .region-name{ font-size:16px; margin-bottom:10px; }
+  .region-card.solo .region-line{ font-size:13px; margin-bottom:6px; }
+  .empty-hint{
+    font-size:13px; color:var(--ink-soft); background:var(--card); border:1.5px dashed var(--line);
+    border-radius:12px; padding:18px; text-align:center;
+  }
+
+  @media (max-width:380px){
+    .step-card{padding:18px 16px;}
+    .step-title{font-size:17px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app" style="display:block;">
+  <header class="top">
+    <div class="brand-row">
+      <div class="brand"><span class="dot"></span>イベントフロー</div>
+    </div>
+
+    <div class="sel-grid">
+      <div class="sel-item">
+        <div class="sel-label">イベント</div>
+        <div class="selector-row compact" id="eventRow"></div>
+      </div>
+      <div class="sel-item">
+        <div class="sel-label">年齢</div>
+        <div class="selector-row compact" id="ageRow"></div>
+      </div>
+      <div class="sel-item full">
+        <div class="sel-label">地域・教育タイプ</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select class="pref-select compact" id="prefSelect" onchange="onPrefChange()">
+            <option value="">地域を選ぶ</option>
+          </select>
+          <div class="selector-row compact" id="mindsetRow" style="flex:1;overflow-x:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-toggle">
+      <button id="modeStepBtn" class="active" onclick="setMode('step')">ステップ</button>
+      <button id="modeFlowBtn" onclick="setMode('flow')">フロー</button>
+      <button id="modeRegionBtn" onclick="setMode('region')">地域</button>
+      <button id="modeEventBtn" onclick="setMode('event')">イベント</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="stepView"></div>
+    <div id="flowView" style="display:none;"></div>
+    <div id="regionView" style="display:none;"></div>
+    <div id="eventView" style="display:none;"></div>
+  </main>
+</div>
+
+<script>
+// ====== トークフロー データ ======
+// 構造: EVENTS[eventId].ages[ageId] = { steps: [...] }
+// 各 step: { id, speaker_label, lines:[strings], note(目的/行動), branch: {yes:{label,goto}, no:{label,goto}} }
+
+const EVENTS = [
+  { id: "mall",   label: "モール",   sub: "商業施設内ブース",
+    tip: "通行客に風船を配りながら自然に足を止めてもらう。テンポよく、明るく話しかけるのが基本。",
+    do: "風船・ノベルティを先に渡してから話しかけると警戒心が下がる／買い物の合間で足を止めやすい時間帯（午後〜夕方）は特に積極的に声かけする",
+    avoid: "施設のルールで長時間の引き留めはNGなことが多いので、最初の数十秒でテンポよく要点を伝える",
+    timing: "目安：声かけ〜サンプル提案までを1分以内で" },
+  { id: "shop",   label: "ママフェス", sub: "ママ・子育て向けイベント",
+    tip: "ママ同士のコミュニティ意識が高い場。共感ファーストで話しかけ、「同じ立場の人への情報提供」として伝えると響きやすい。",
+    do: "「うちの子も〜」という共感トークから入る／ママ友と一緒に来ている場合は2人に向けて話す",
+    avoid: "一方的な説明に見えると引かれやすい。会話のキャッチボールを意識して進める",
+    timing: "目安：来場〜クロージングまで5〜10分程度を想定" },
+  { id: "super",  label: "スーパー", sub: "スーパー店頭・買い物中の声かけ",
+    tip: "お買い物中で時間が限られているため、最初から「少しだけ」と時間の負担を明示して安心させる。",
+    do: "カートの中身（お子様の年齢が分かるもの）を見て自然に声かけのきっかけを作る／レジ前など動きが止まるタイミングを狙う",
+    avoid: "買い物の妨げになっていると感じさせると即座に切られるので、長居せず手短に進める",
+    timing: "目安：声かけ〜サンプル提案までを30秒以内で" },
+  { id: "local",  label: "ベビイベ", sub: "ベビー・乳幼児向けイベント",
+    tip: "赤ちゃん連れが多く、抱っこ中や授乳後など体力的に余裕がないママも多い。手短に・やさしく話しかけるのが大切。",
+    do: "「赤ちゃん何ヶ月ですか？」という自然な声かけから始める／疲れているママには「すぐ終わります」と一言添える",
+    avoid: "長時間立たせるのは避ける。椅子がある場所に誘導できると良い",
+    timing: "目安：声かけ〜クロージングまで5分前後を想定" },
+  { id: "street", label: "路上",     sub: "路上・通りすがりの声かけ",
+    tip: "最もハードルが高い場面。短い時間でまず立ち止まってもらうことを最優先にする。",
+    do: "風船などのノベルティを最初に見せて足を止めてもらう／視線が合った瞬間にすぐ声をかける",
+    avoid: "立ち止まる理由がないと素通りされやすいので、最初の一言を最も明るく・短くする",
+    timing: "目安：声かけ〜足止めまでを5秒以内で" },
+];
+
+const AGES = [
+  { id: "maternity", label: "マタニティ" },
+  { id: "0",  label: "0歳" },
+  { id: "1",  label: "1歳" },
+  { id: "2",  label: "2歳" },
+  { id: "3",  label: "3歳" },
+  { id: "4",  label: "4歳" },
+  { id: "5",  label: "5歳" },
+  { id: "elem", label: "小学生" },
+];
+
+// ---- 年齢ごとのトーン調整パーツ（プレースホルダ仮データ） ----
+const AGE_TONE = {
+  "maternity": { tag: "胎教訴求",     hook: "お腹の赤ちゃんも、もう音が聞こえてる時期なんです",  product: "胎教向けの英語CD・音楽教材",       push: "お腹の中にいる時から、英語の音に触れておくと違いますよ" },
+  "0":   { tag: "赤ちゃん反応訴求",   hook: "今、英語に反応するか試してみませんか？",      product: "赤ちゃん用の英語DVD・CD",          push: "今の月齢だからこそ見れる反応がありますよ" },
+  "1":   { tag: "音への反応訴求",     hook: "歌や音にすごく反応する時期なんです",          product: "歌・リズム中心の英語教材",          push: "1歳のうちは耳がどんどん育つ時期なので" },
+  "2":   { tag: "発語の芽生え訴求",   hook: "お話し始める時期、英語の音もすぐ吸収しますよ", product: "発語をうながす英語教材",            push: "今が一番吸収力の高いタイミングです" },
+  "3":   { tag: "好奇心訴求",        hook: "好奇心が一番強い時期、お子様も喜びますよ",      product: "知育要素入りの英語教材",            push: "好きなものから入ると伸びるタイミングです" },
+  "4":   { tag: "プレ就学訴求",      hook: "年中さんは始めるご家庭が一気に増える時期です", product: "プレ就学準備の英語教材",            push: "周りが始める前に差をつけやすい時期です" },
+  "5":   { tag: "就学準備訴求",      hook: "来年小学生、英語の差が気になる時期ですよね",   product: "就学準備の英語教材",                push: "小学校で差がつく前に整えられる最後のタイミングです" },
+  "elem":{ tag: "学校英語連動訴求",   hook: "今、学校で英語の差がすごく広がってるんです",  product: "学校英語に直結する教材",            push: "授業に直結するので、今からでも十分間に合います" },
+};
+
+// ---- イベントごとのトーン調整パーツ ----
+const EVENT_TONE = {
+  mall:   { opener: "あ！ママ、風せんだけでもどうぞ！",     context: "今日はこちらのイベントで初めてお会いした感じで",   closing_time: "1時間〜" },
+  shop:   { opener: "こんにちは！今日はブース見ていただいてありがとうございます！", context: "出展ブースに来ていただいた流れで", closing_time: "1時間〜" },
+  super:  { opener: "こんにちは、お買い物中すみません！",   context: "お買い物中に少しだけ、という体で",                 closing_time: "30分〜" },
+  local:  { opener: "わざわざこちらまでありがとうございます！", context: "地方開催で来場のハードルが高かったことに触れて", closing_time: "1時間〜" },
+  street: { opener: "あ！ちょっとだけお時間いいですか？",   context: "通りすがりで足を止めてもらう体で",                 closing_time: "30分〜" },
+};
+
+function buildSteps(eventId, ageId) {
+  const et = EVENT_TONE[eventId];
+  const at = AGE_TONE[ageId];
+  const isMaternity = ageId === "maternity";
+  const childWord = isMaternity ? "お腹の赤ちゃん" : "お子様";
+  return [
+    {
+      id: "first",
+      title: "ファースト",
+      lines: ["「あ！ママ、風せんだけでもどうぞ！」"],
+      note: `目的：初めて会ったように接する事で足を止める／行動：${eventId === "super" ? "カートの前に自然に周り込む" : "ベビーカーの前に自然に周り込む"}`,
+    },
+    {
+      id: "sample",
+      title: "フック（サンプル提案）",
+      lines: ["「サンプルもらった事ありますか？」"],
+      note: "目的：YES/NOで次の分岐をつくる",
+      branch: {
+        yes: { label: "YES", goto: "survey", text: `「ありがとうございます！新しいのが出ましたよ！特別に今日プレゼントできますよ」⇒目的：言い切りで断りにくくする` },
+        no:  { label: "NO",  goto: "survey", text: `「よかったです〜今日（${childWord}）${at.product}が特別にプレゼントです！良かったら、持って帰って下さい♡」⇒目的：NOを出ないようにする` },
+      },
+    },
+    {
+      id: "regionTalk",
+      title: "地域の英語教育トーク",
+      lines: [
+        "「このあたりも、最近は英語を早くから始めるご家庭、すごく増えてますよね」",
+        "「小学校から英語の授業が始まってるのは、ご存知でしたか？」",
+        "「今は教科として成績にも入ってくるので、できる子とできない子の差がどんどん広がってるみたいなんです」",
+        "「だから、小さいうちから音に慣れておくご家庭が多いんですよ」",
+      ],
+      note: "目的：地域の教育トレンドに軽く触れて、自分ごと化してもらう（地域メモを選んでいる場合は、その地域の言い回し・訴求ポイントを意識して話す）",
+    },
+    {
+      id: "survey",
+      title: "アンケート",
+      lines: ["★もらってくれると言われたら…", "「ありがとうございます〜4問だけアンケートご協力お願いしますね」"],
+      note: "目的：後出しすることで断りにくくする",
+    },
+    {
+      id: "afterSurvey",
+      title: "アンケート後",
+      lines: [
+        "「ありがとうございます。このアンケートにご協力頂いた方限定で、ミッキーミニーのポンチョ、ABCカードがプレゼントできる、無料体験がありました。」",
+        isMaternity
+          ? "「この体験で見て頂きたいのは、教材そのものではなく、お腹の赤ちゃんが音にどう反応するか、なんですね！」"
+          : "「この体験で見て頂きたいのは、私どもの教材ではなく、お子様の反応とすぐ来る学校での英語なんですね！」",
+        isMaternity
+          ? "「お腹の中でも、音楽を聞かせると動きが変わる赤ちゃんもいるんです！」"
+          : "「赤ちゃんでも、英語を聞いたら泣く子もいれば、笑う子もいるんです！」",
+        `「${at.push}」`,
+        isMaternity
+          ? "「無料ですし、購入の必要もありませんので、ママとパパに、いつから胎教を始めようかなって決めて頂くのが1番なんですね？」"
+          : "「無料ですし、購入の必要もありませんので、ママとパパに、うちはいつから英語始めようかなって決めて頂くのが1番なんですね？」",
+      ],
+      note: "目的：全部もらえるように見せる／行動：お客様の反応で何に響いてるのか見る（布石）→ディズニー色を減らして安心感をあたえる→私が教えるスタンスづくり",
+    },
+    {
+      id: "appointment",
+      title: "日程確認",
+      lines: [`「良かったら、お休みの日にでも、1時間くらいでお家でできる体験、いかがですか？」`],
+      note: "目的：2人を揃えることを意識",
+      branch: {
+        yes: { label: "YES", goto: "closing", text: "「休みの日はいつです？」→日程決め／行動：絶対に先に決める" },
+        no:  { label: "NO",  goto: "closing", text: "あきらめる！すぐ！ただサンプルは使うように案内" },
+      },
+    },
+    {
+      id: "closing",
+      title: "クロージング",
+      lines: [
+        "「では、最後に、ママ、パパに、うちの教材のお値段聞かれたら、お出ししますけど、合わなければ気持ちよく断って下さいね！」⇒YESもらうのは絶対！【最重要】",
+        "「ママとパパにご無理言わないので！」⇒目的：飛び防止",
+        `「お時間ですが、1時間くらいでみて頂いています。プレゼント持ってお伺いするので、よろしくお願いします。」`,
+      ],
+      note: "目的：即決の示唆／飛び防止",
+    },
+  ];
+}
+
+const FLOWS = {};
+EVENTS.forEach(ev => {
+  FLOWS[ev.id] = {};
+  AGES.forEach(age => {
+    FLOWS[ev.id][age.id] = { steps: buildSteps(ev.id, age.id) };
+  });
+});
+
+const POINTS = [
+  "アポの精度上げは日程が決まってからやる。",
+  "フロントはテンポ良くやる事で、ハードルを下げる。",
+  "近所のおばちゃんのように話す。（良く笑う！良く話す！良く手を使う！）",
+  "「〜よ」（対話）、「〜ね」（共有）が大切！",
+];
+
+// ====== 地域メモ：関東7都県 ======
+// [name, dialect, appeal, icebreaker, caution]
+const PREFS = [
+  ["東京都",
+    "テンポ速め、結論先出し。だらだら話すと「で、結局何？」という反応をされやすい",
+    "時短訴求が強い。共働き前提で話す／習い事の選択肢が多いため「他と何が違うか」を明確に",
+    "「保育園・幼稚園の送迎、大変じゃないですか？」など時間の負担を話のきっかけにすると入りやすい",
+    "売り込み感を出すと一気に離れる。情報提供スタンスを崩さないこと"],
+  ["神奈川県",
+    "テンポ速めだが、東京よりやや柔らかい言い回しが好まれる",
+    "教育投資への抵抗感が少ない層が多い。複数の習い事をしている前提で話すと刺さりやすい",
+    "「他にも何か習わせてます？」と聞くと、すでに教育意識が高いことが分かりやすい",
+    "横浜・湘南エリアは比較検討に慣れているため、他社比較の話題が出やすい想定をしておく"],
+  ["埼玉県",
+    "都内とほぼ同テンポ。標準語ベースで問題なし",
+    "教育熱の高いベッドタウン層。学校差を厚めに／都内通学・受験への意識が高い家庭が多い",
+    "「お子さん、将来は私立も考えてます？」など将来の選択肢の話から入ると関心を引きやすい",
+    "都内との比較で「うちは田舎だから」と謙遜されることがあるが、否定せず共感から入る"],
+  ["千葉県",
+    "都内とほぼ同テンポ。落ち着いた言い回しも好まれる",
+    "受験文化と絡めると響きやすい／中学受験を意識する家庭が一定数いる",
+    "「最近、英語の入試も増えてますよね」と受験の話題を振ると関心を引きやすい",
+    "成田・船橋エリアと内房エリアで教育熱の差があるため、反応を見ながら調整する"],
+  ["茨城県",
+    "東京寄りのテンポだが、急かしすぎない方が良い",
+    "都内通勤層が多く時間がない設定が刺さる／車移動が前提のため自宅体験の利便性も強い武器になる",
+    "「ご主人、都内まで通勤されてます？」と聞くと、時間のなさへの共感に繋げやすい",
+    "つくば市など研究者・高学歴層が多いエリアでは、データや実績ベースの説明を厚めに"],
+  ["栃木県",
+    "ゆったりめのトーン。急かす印象を与えないこと",
+    "車移動前提なので自宅体験の利便性を強調／三世代世帯が多く祖父母の意見も意識する",
+    "「お子さん、おじいちゃんおばあちゃんとも仲良いですか？」と聞くと家族構成が見えやすい",
+    "教育投資への即決は少なめなので、即決を急かしすぎないこと"],
+  ["群馬県",
+    "ゆったりめのトーン。車社会前提で会話を組み立てる",
+    "車社会、家族での意思決定を意識した進め方／パパの同意も得やすい場づくりが大切",
+    "「お休みの日、ご家族でどこかお出かけされます？」と聞くと家族の時間の使い方が見えやすい",
+    "教育意識は中程度のため、煽らず安心感ワードを多めに使うこと"],
+];
+
+const PREFECTURES = PREFS.map((p, i) => ({
+  id: "p" + i, name: p[0], dialect: p[1], appeal: p[2], icebreaker: p[3], caution: p[4]
+}));
+
+// ====== 教育意識タイプ（地域選択のあとに追加で選ぶ軸） ======
+const MINDSETS = [
+  {
+    id: "high",
+    label: "教育意識高め",
+    note: "早期教育への投資に積極的。実績・データ・周りとの差を具体的に示すと響きやすい。",
+    push: "今からやっておくと、周りのお子さんとの差がしっかりつきますよ",
+    do: "具体的な数字（差がついた事例、学校での成績差など）を示す／他の家庭の取り組み状況に触れる／決断が早いので、即決を後押しする一言を入れる",
+    avoid: "曖昧な言い方や、のんびりしたトーンは逆に頼りなく見える。テンポよく、根拠を添えて話す",
+  },
+  {
+    id: "standard",
+    label: "標準",
+    note: "極端に煽らず、安心感とコスパ感のバランスを意識。無理に急かさない方が刺さる。",
+    push: "無理なく、お家でできる範囲で始めて頂ければ十分ですよ",
+    do: "「無理しなくていい」「焦らなくていい」というメッセージを繰り返す／コスパ・続けやすさを具体的に伝える",
+    avoid: "危機感を煽る言い方（差がつく、遅れる等）は引かれやすい。安心材料を先に出すこと",
+  },
+  {
+    id: "free",
+    label: "伸び伸び地域",
+    note: "詰め込み感を嫌う傾向。遊び・体験の延長として英語を位置づけると受け入れられやすい。",
+    push: "勉強っていうより、遊びの延長で英語に触れてもらうイメージですよ",
+    do: "「楽しい」「遊び」「体験」というワードを多用する／お子様の反応・笑顔を中心に話を組み立てる",
+    avoid: "「差がつく」「遅れる」といった競争を匂わせる言い方は強い拒否反応につながりやすい",
+  },
+];
+
+window.APP_DATA = { EVENTS, AGES, FLOWS, POINTS, PREFECTURES, MINDSETS };
+
+
+// ===== State =====
+let state = {
+  eventId: APP_DATA.EVENTS[0].id,
+  ageId: APP_DATA.AGES[0].id,
+  prefId: "",
+  mindsetId: "",
+  mode: "step",
+  stepIndex: 0,
+  branchOpen: {},
+};
+
+function init(){
+  renderSelectors();
+  renderPrefOptions();
+  renderMindsetRow();
+  render();
+}
+
+function renderSelectors(){
+  const evRow = document.getElementById('eventRow');
+  evRow.innerHTML = APP_DATA.EVENTS.map(ev =>
+    `<button class="chip ${ev.id===state.eventId?'active':''}" onclick="selectEvent('${ev.id}')">${ev.label}</button>`
+  ).join('');
+
+  const ageRow = document.getElementById('ageRow');
+  ageRow.innerHTML = APP_DATA.AGES.map(a =>
+    `<button class="chip ${a.id===state.ageId?'active':''}" onclick="selectAge('${a.id}')">${a.label}</button>`
+  ).join('');
+}
+
+function renderPrefOptions(){
+  const sel = document.getElementById('prefSelect');
+  // Clear all options except the first placeholder ("選択しない") to avoid duplicates on re-render
+  while(sel.options.length > 1){
+    sel.remove(1);
+  }
+  APP_DATA.PREFECTURES.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+}
+
+function renderMindsetRow(){
+  const row = document.getElementById('mindsetRow');
+  row.innerHTML = `<button class="chip ${state.mindsetId===''?'active':''}" onclick="selectMindset('')">選択しない</button>` +
+    APP_DATA.MINDSETS.map(m =>
+      `<button class="chip ${m.id===state.mindsetId?'active':''}" onclick="selectMindset('${m.id}')">${m.label}</button>`
+    ).join('');
+}
+
+function selectMindset(id){ state.mindsetId = id; renderMindsetRow(); render(); }
+
+function selectEvent(id){ state.eventId=id; state.stepIndex=0; state.branchOpen={}; renderSelectors(); render(); }
+function selectAge(id){ state.ageId=id; state.stepIndex=0; state.branchOpen={}; renderSelectors(); render(); }
+function onPrefChange(){ state.prefId = document.getElementById('prefSelect').value; render(); }
+
+function setMode(m){
+  state.mode = m;
+  document.getElementById('modeStepBtn').classList.toggle('active', m==='step');
+  document.getElementById('modeFlowBtn').classList.toggle('active', m==='flow');
+  document.getElementById('modeRegionBtn').classList.toggle('active', m==='region');
+  document.getElementById('modeEventBtn').classList.toggle('active', m==='event');
+  document.getElementById('stepView').style.display = m==='step' ? 'block':'none';
+  document.getElementById('flowView').style.display = m==='flow' ? 'block':'none';
+  document.getElementById('regionView').style.display = m==='region' ? 'block':'none';
+  document.getElementById('eventView').style.display = m==='event' ? 'block':'none';
+  render();
+}
+
+function currentFlow(){
+  return APP_DATA.FLOWS[state.eventId][state.ageId];
+}
+function currentPref(){
+  if(!state.prefId) return null;
+  return APP_DATA.PREFECTURES.find(p=>p.id===state.prefId);
+}
+
+function currentMindset(){
+  if(!state.mindsetId) return null;
+  return APP_DATA.MINDSETS.find(m=>m.id===state.mindsetId);
+}
+
+function prefNoteHTML(){
+  const p = currentPref();
+  const m = currentMindset();
+  if(!p && !m) return '';
+  let html = '<div class="pref-note">';
+  if(p){
+    html += `<span class="pref-name">${p.name} の地域メモ</span>言い回し：${p.dialect}<br>訴求ポイント：${p.appeal}`;
+  }
+  if(m){
+    html += `${p ? '<br><br>' : ''}<span class="pref-name">${m.label} 向けメモ</span>${m.note}<br>言い回し例：「${m.push}」`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function render(){
+  if(state.mode==='step') renderStep();
+  else if(state.mode==='flow') renderFlow();
+  else if(state.mode==='region') renderRegion();
+  else renderEvent();
+}
+
+// ===== Step Mode =====
+function renderStep(){
+  const steps = currentFlow().steps;
+  const i = state.stepIndex;
+  const step = steps[i];
+  const total = steps.length;
+
+  const progress = Array.from({length:total}).map((_,idx)=>
+    `<div class="seg ${idx<=i?'done':''}"></div>`
+  ).join('');
+
+  let branchHTML = '';
+  if(step.branch){
+    const openKey = step.id;
+    const openWhich = state.branchOpen[openKey];
+    branchHTML = `
+      <div class="branch-row">
+        <button class="branch-btn yes" onclick="toggleBranch('${openKey}','yes')">${step.branch.yes.label}</button>
+        <button class="branch-btn no" onclick="toggleBranch('${openKey}','no')">${step.branch.no.label}</button>
+      </div>
+      <div class="branch-detail ${openWhich==='yes'?'show':''}">${step.branch.yes.text}</div>
+      <div class="branch-detail ${openWhich==='no'?'show':''}">${step.branch.no.text}</div>
+    `;
+  }
+
+  document.getElementById('stepView').innerHTML = `
+    <div class="progress-track">${progress}</div>
+    <div class="step-card">
+      <div class="step-eyebrow">STEP ${i+1} / ${total}</div>
+      <h2 class="step-title">${step.title}</h2>
+      ${step.lines.map(l=>`<p class="step-line">${l}</p>`).join('')}
+      ${step.note ? `<div class="step-note"><b>ポイント：</b>${step.note}</div>` : ''}
+      ${branchHTML}
+      ${i===total-1 ? prefNoteHTML() : ''}
+    </div>
+    <div class="nav-row">
+      <button class="nav-btn" onclick="stepNav(-1)" ${i===0?'disabled':''}>← 前へ</button>
+      <button class="nav-btn primary" onclick="stepNav(1)" ${i===total-1?'disabled':''}>次へ →</button>
+    </div>
+  `;
+}
+
+function toggleBranch(stepId, which){
+  state.branchOpen[stepId] = state.branchOpen[stepId]===which ? null : which;
+  renderStep();
+}
+
+function stepNav(dir){
+  const total = currentFlow().steps.length;
+  state.stepIndex = Math.min(total-1, Math.max(0, state.stepIndex+dir));
+  renderStep();
+}
+
+// ===== Flow Mode =====
+function renderFlow(){
+  const steps = currentFlow().steps;
+  const nodesHTML = steps.map(step=>{
+    let branchHTML = '';
+    if(step.branch){
+      branchHTML = `
+        <div class="flow-branches">
+          <div class="flow-branch yes"><span class="blabel">YES</span>${step.branch.yes.text}</div>
+          <div class="flow-branch no"><span class="blabel">NO</span>${step.branch.no.text}</div>
+        </div>`;
+    }
+    return `
+      <div class="flow-node">
+        <div class="flow-card">
+          <div class="ftitle">${step.title}</div>
+          ${step.lines.map(l=>`<div class="fline">${l}</div>`).join('')}
+          ${step.note ? `<div class="fnote">${step.note}</div>` : ''}
+          ${branchHTML}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('flowView').innerHTML = `
+    ${nodesHTML}
+    <div class="points-box">
+      <h3>共通ポイント</h3>
+      <ol>${APP_DATA.POINTS.map(p=>`<li>${p}</li>`).join('')}</ol>
+    </div>
+    <div class="pref-block">${prefNoteHTML() || '<div style="font-size:12px;color:var(--ink-soft);">地域メモ・教育意識タイプを選択すると、ここに表示されます。</div>'}</div>
+  `;
+}
+
+// ===== Region Mode =====
+function renderRegion(){
+  const p = currentPref();
+  const m = currentMindset();
+
+  const prefHTML = p ? `
+    <div class="region-section-label">選択中の地域</div>
+    <div class="region-card active solo">
+      <div class="region-name">${p.name}</div>
+      <div class="region-line"><b>言い回し：</b>${p.dialect}</div>
+      <div class="region-line"><b>訴求ポイント：</b>${p.appeal}</div>
+      <div class="region-line"><b>会話のきっかけ：</b>${p.icebreaker}</div>
+      <div class="region-line"><b>注意点：</b>${p.caution}</div>
+    </div>
+  ` : `
+    <div class="region-section-label">選択中の地域</div>
+    <div class="empty-hint">上部の「地域メモ」から都県を選んでください。</div>
+  `;
+
+  const mindsetHTML = m ? `
+    <div class="region-section-label" style="margin-top:24px;">選択中の教育意識タイプ</div>
+    <div class="region-card mindset active solo">
+      <div class="region-name">${m.label}</div>
+      <div class="region-line">${m.note}</div>
+      <div class="region-line"><b>言い回し例：</b>「${m.push}」</div>
+      <div class="region-line"><b>意識すること：</b>${m.do}</div>
+      <div class="region-line"><b>避けること：</b>${m.avoid}</div>
+    </div>
+  ` : `
+    <div class="region-section-label" style="margin-top:24px;">選択中の教育意識タイプ</div>
+    <div class="empty-hint">上部の「教育意識タイプ」から選んでください。</div>
+  `;
+
+  document.getElementById('regionView').innerHTML = prefHTML + mindsetHTML;
+}
+
+function pickPref(id){
+  state.prefId = (state.prefId === id) ? "" : id;
+  document.getElementById('prefSelect').value = state.prefId;
+  render();
+}
+function pickMindset(id){
+  state.mindsetId = (state.mindsetId === id) ? "" : id;
+  renderMindsetRow();
+  render();
+}
+
+// ===== Event Mode =====
+function renderEvent(){
+  const ev = APP_DATA.EVENTS.find(e=>e.id===state.eventId);
+  if(!ev){
+    document.getElementById('eventView').innerHTML = `<div class="empty-hint">上部の「イベント」からイベントを選んでください。</div>`;
+    return;
+  }
+  document.getElementById('eventView').innerHTML = `
+    <div class="region-section-label">選択中のイベント</div>
+    <div class="region-card active solo">
+      <div class="region-name">${ev.label}</div>
+      <div class="region-line"><b>シーン：</b>${ev.sub}</div>
+      <div class="region-line"><b>進め方：</b>${ev.tip}</div>
+      <div class="region-line"><b>意識すること：</b>${ev.do}</div>
+      <div class="region-line"><b>避けること：</b>${ev.avoid}</div>
+      <div class="region-line"><b>時間の目安：</b>${ev.timing}</div>
+    </div>
+  `;
+}
+
+function pickEvent(id){
+  state.eventId = id;
+  state.stepIndex = 0;
+  state.branchOpen = {};
+  renderSelectors();
+  renderEvent();
+}
+
+init();
+</script>
+</body>
+</html>
